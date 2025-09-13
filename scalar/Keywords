@@ -1,0 +1,353 @@
+1. Core Concepts & Architecture Keywords
+SAN Automation
+
+Storage Management
+
+RAID Configuration
+
+Volume Management
+
+Storage Provisioning
+
+Performance Testing
+
+API Integration
+
+SSH Automation
+
+Modular Architecture
+
+Object-Oriented Design
+
+Abstract Base Classes
+
+Vendor Abstraction
+
+Host Management
+
+Configuration Management
+
+Error Handling
+
+Logging System
+
+2. Class & Component Keywords
+BaseSanManager - Abstract SAN management class
+
+BaseHostManager - Abstract host management class
+
+SanAutomationOrchestrator - Main orchestration class
+
+ConfigManager - Configuration handling
+
+BaseVendor - Vendor abstraction base
+
+GenericVendor - Default vendor implementation
+
+BaseHost - Host abstraction base
+
+LinuxHost - Linux host implementation
+
+Config - Configuration data class
+
+ConfigSchema - Configuration validation
+
+3. Method & Function Keywords
+connect() - Establish connections
+
+disconnect() - Close connections
+
+get_disks() - Retrieve available disks
+
+create_raid() - Create RAID array
+
+create_volume() - Create storage volume
+
+map_volume_to_host() - Map volume to host
+
+rescan_storage() - Rescan storage devices
+
+detect_new_device() - Detect new storage
+
+format_device() - Format storage device
+
+mount_device() - Mount filesystem
+
+run_performance_test() - Run storage benchmarks
+
+execute_command() - Execute remote commands
+
+initialize_connections() - Initialize all connections
+
+create_storage_infrastructure() - Create storage setup
+
+configure_host_storage() - Configure host storage
+
+cleanup() - Resource cleanup
+
+get_status_report() - Get operation status
+
+4. Vendor-Specific Keywords
+DellEMCVendor - Dell EMC implementation
+
+NetAppVendor - NetApp implementation
+
+HPEVendor - HPE implementation
+
+Vendor Abstraction - Vendor-agnostic interface
+
+API Integration - REST API communication
+
+CLI Commands - Command-line interface
+
+Storage Array - SAN storage system
+
+LUN Mapping - Logical Unit Number mapping
+
+iSCSI Configuration - iSCSI protocol setup
+
+Fibre Channel - FC storage networking
+
+5. Host Management Keywords
+Linux Host - Linux system management
+
+Windows Host - Windows system management
+
+ESXi Host - VMware ESXi management
+
+SSH Connection - Secure shell access
+
+Remote Execution - Remote command execution
+
+Device Detection - Storage device discovery
+
+Filesystem Management - Filesystem operations
+
+Mount Operations - Filesystem mounting
+
+Performance Benchmarking - Storage performance testing
+
+6. Configuration Keywords
+JSON Configuration - JSON-based config
+
+Configuration Validation - Config data validation
+
+IP Validation - IP address validation
+
+Credential Management - Authentication handling
+
+RAID Level Validation - RAID configuration validation
+
+Size Validation - Storage size validation
+
+Protocol Configuration - Storage protocol setup
+
+7. Utility & Helper Keywords
+Logging Utilities - Log management
+
+Retry Mechanism - Operation retry logic
+
+Timeout Handling - Operation timeout control
+
+Error Handling - Exception management
+
+Validation Utilities - Data validation
+
+Connection Pooling - Connection management
+
+Async Operations - Asynchronous processing
+
+Status Tracking - Operation status monitoring
+
+8. Protocol & Technology Keywords
+REST API - RESTful API communication
+
+SSH Protocol - Secure shell protocol
+
+iSCSI Protocol - Internet SCSI
+
+Fibre Channel - FC storage network
+
+NFS Protocol - Network File System
+
+SMB Protocol - Server Message Block
+
+RAID Levels - RAID 0, 1, 5, 6, 10
+
+LUN Management - Logical Unit management
+
+Volume Provisioning - Storage provisioning
+
+9. Performance Testing Keywords
+IO Meter - I/O performance tool
+
+FIO - Flexible I/O tester
+
+DD Benchmark - Disk dump testing
+
+Throughput Testing - Data transfer testing
+
+IOPS Measurement - I/O operations per second
+
+Latency Measurement - Response time testing
+
+Random Read/Write - Random access testing
+
+Sequential Read/Write - Sequential access testing
+
+Block Size Testing - Different block size testing
+
+10. Error & Exception Keywords
+SanError - SAN-related exceptions
+
+HostError - Host-related exceptions
+
+ConfigError - Configuration exceptions
+
+ConnectionError - Connection failures
+
+OperationError - Operation failures
+
+AuthenticationError - Auth failures
+
+TimeoutError - Operation timeouts
+
+ValidationError - Data validation failures
+
+11. Storage Concepts Keywords
+Storage Array - SAN storage system
+
+Disk Pool - Storage disk collection
+
+RAID Group - RAID configuration group
+
+Volume Group - Volume collection
+
+Logical Volume - Logical storage unit
+
+Physical Disk - Physical storage device
+
+LUN Masking - LUN access control
+
+Storage Pool - Storage resource pool
+
+Thin Provisioning - Thin storage allocation
+
+Thick Provisioning - Thick storage allocation
+
+12. Filesystem Keywords
+EXT4 - Linux filesystem
+
+XFS - High-performance filesystem
+
+NTFS - Windows filesystem
+
+VMFS - VMware filesystem
+
+Filesystem Formatting - Disk formatting
+
+Mount Points - Filesystem mount locations
+
+Filesystem Options - Mount options
+
+Partitioning - Disk partitioning
+
+13. Monitoring & Reporting Keywords
+Status Monitoring - Operation status tracking
+
+Performance Metrics - Performance data collection
+
+Log Collection - Log data gathering
+
+Report Generation - Report creation
+
+Health Checking - System health monitoring
+
+Alerting - Notification system
+
+Metrics Collection - Performance data gathering
+
+Dashboard - Monitoring interface
+
+14. Security Keywords
+Authentication - User authentication
+
+Authorization - Access control
+
+SSL/TLS - Secure communication
+
+Certificate Management - SSL certificate handling
+
+Credential Storage - Secure credential storage
+
+Access Control - Permission management
+
+Security Policies - Security rule enforcement
+
+15. Deployment & Operations Keywords
+Automation Script - Automated deployment
+
+Orchestration - Workflow management
+
+Scheduling - Task scheduling
+
+Batch Processing - Batch operation handling
+
+Rollback Mechanism - Operation rollback
+
+Backup Procedures - Data backup
+
+Disaster Recovery - Recovery procedures
+
+High Availability - HA configuration
+
+16. Testing & Validation Keywords
+Unit Testing - Component testing
+
+Integration Testing - System testing
+
+Functional Testing - Feature testing
+
+Performance Testing - Speed testing
+
+Load Testing - Capacity testing
+
+Stress Testing - Extreme condition testing
+
+Regression Testing - Change validation
+
+Validation Suite - Test collection
+
+17. Documentation Keywords
+API Documentation - Interface documentation
+
+User Guide - User documentation
+
+Installation Guide - Setup instructions
+
+Configuration Guide - Config documentation
+
+Troubleshooting Guide - Problem resolution
+
+Best Practices - Recommended usage
+
+Examples - Usage examples
+
+Reference Manual - Detailed reference
+
+18. Integration Keywords
+API Integration - External API connection
+
+CLI Integration - Command-line integration
+
+Web Services - Web service integration
+
+Database Integration - Database connectivity
+
+Monitoring Integration - Monitoring system connection
+
+Logging Integration - Log system connection
+
+Alerting Integration - Alert system connection
+
+Dashboard Integration - UI integration
