@@ -1,0 +1,11 @@
+# Run specific test file
+robot example_test.robot
+
+# Run with specific output directory
+robot -d results example_test.robot
+
+# Run specific test case
+robot -t "Simple Arithmetic Test" example_test.robot
+
+# Run with tags (if you add [Tags] to test cases)
+robot -i arithmetic example_test.robot
