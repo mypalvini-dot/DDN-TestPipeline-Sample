@@ -1,0 +1,15 @@
+def setup_iometer(self):
+    """Alternative IOmeter setup method"""
+    try:
+        # Download IOmeter
+        download_cmd = "wget http://iometer.org/downloads/IOMeter-1.1.0-rc1-linux.x86_64-bin.tar.bz2"
+        self.ssh_client.exec_command(download_cmd)
+        
+        # Extract and setup
+        extract_cmd = "tar -xjf IOMeter-1.1.0-rc1-linux.x86_64-bin.tar.bz2"
+        self.ssh_client.exec_command(extract_cmd)
+        
+        return True
+    except Exception as e:
+        logger.error(f"IOmeter setup error: {e}")
+        return False
