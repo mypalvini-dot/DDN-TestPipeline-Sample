@@ -1,0 +1,8 @@
+# Run full automation
+python san_automation.py
+
+# Run only performance test
+python san_automation.py --test-only
+
+# Custom configuration
+python san_automation.py --config my_config.json --duration 600 --size 200
