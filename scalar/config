@@ -1,0 +1,13 @@
+{
+  "san_ip": "10.196.172.88",
+  "host_ip": "10.196.172.90",
+  "san_username": "admin",
+  "san_password": "your_password",
+  "host_username": "root",
+  "host_password": "your_password",
+  "raid_level": "5",
+  "volume_size_gb": 100,
+  "volume_name": "test_volume",
+  "mount_point": "/mnt/san_volume",
+  "test_duration": 300
+}
