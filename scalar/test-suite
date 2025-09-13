@@ -1,0 +1,295 @@
+import paramiko
+import time
+import subprocess
+import logging
+from typing import Optional
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+class SanStorageManager:
+    def __init__(self, san_ip: str, host_ip: str, username: str = "admin", password: str = "password"):
+        self.san_ip = san_ip
+        self.host_ip = host_ip
+        self.username = username
+        self.password = password
+        self.ssh_client = None
+        
+    def connect_to_san(self) -> bool:
+        """Establish SSH connection to SAN storage"""
+        try:
+            self.ssh_client = paramiko.SSHClient()
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh_client.connect(
+                self.san_ip, 
+                username=self.username, 
+                password=self.password,
+                timeout=30
+            )
+            logger.info(f"Successfully connected to SAN storage: {self.san_ip}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to SAN: {e}")
+            return False
+    
+    def create_raid5(self, drive_ids: list) -> bool:
+        """Create RAID 5 array with specified drives"""
+        if not self.ssh_client:
+            logger.error("Not connected to SAN")
+            return False
+        
+        try:
+            # This command will vary based on SAN vendor (EMC, NetApp, Dell, etc.)
+            # Example command format - adjust based on your SAN's CLI
+            drive_list = ",".join(drive_ids)
+            raid_command = f"storage array create raid5 drives={drive_list} name=raid5_array"
+            
+            stdin, stdout, stderr = self.ssh_client.exec_command(raid_command)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error:
+                logger.error(f"RAID creation error: {error}")
+                return False
+            
+            logger.info(f"RAID 5 created successfully: {output}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating RAID 5: {e}")
+            return False
+    
+    def create_volume(self, volume_name: str, size_gb: int) -> bool:
+        """Create volume on the RAID array"""
+        try:
+            # Example command - adjust based on SAN CLI
+            volume_command = f"volume create name={volume_name} size={size_gb}GB pool=raid5_array"
+            
+            stdin, stdout, stderr = self.ssh_client.exec_command(volume_command)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error:
+                logger.error(f"Volume creation error: {error}")
+                return False
+            
+            logger.info(f"Volume created successfully: {output}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating volume: {e}")
+            return False
+    
+    def map_volume_to_host(self, volume_name: str, host_iqn: Optional[str] = None) -> bool:
+        """Map volume to host (iSCSI or FC)"""
+        try:
+            # Get host IQN if not provided (for iSCSI)
+            if not host_iqn:
+                host_iqn = self.get_host_iqn()
+            
+            # Map volume to host
+            map_command = f"volume map {volume_name} host={host_iqn} lun=0"
+            
+            stdin, stdout, stderr = self.ssh_client.exec_command(map_command)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error:
+                logger.error(f"Volume mapping error: {error}")
+                return False
+            
+            logger.info(f"Volume mapped successfully: {output}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error mapping volume: {e}")
+            return False
+    
+    def get_host_iqn(self) -> str:
+        """Retrieve host IQN from SAN's perspective"""
+        # This would need to be implemented based on your SAN's host configuration
+        # For demonstration, returning a placeholder
+        return "iqn.2023-12.com.example:host"
+    
+    def disconnect(self):
+        """Close SSH connection"""
+        if self.ssh_client:
+            self.ssh_client.close()
+            logger.info("SSH connection closed")
+
+class HostManager:
+    def __init__(self, host_ip: str, username: str = "root", password: str = "password"):
+        self.host_ip = host_ip
+        self.username = username
+        self.password = password
+        self.ssh_client = None
+    
+    def connect_to_host(self) -> bool:
+        """Establish SSH connection to host"""
+        try:
+            self.ssh_client = paramiko.SSHClient()
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh_client.connect(
+                self.host_ip, 
+                username=self.username, 
+                password=self.password,
+                timeout=30
+            )
+            logger.info(f"Successfully connected to host: {self.host_ip}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to host: {e}")
+            return False
+    
+    def rescan_scsi_bus(self) -> bool:
+        """Rescan SCSI bus to discover new storage"""
+        try:
+            stdin, stdout, stderr = self.ssh_client.exec_command("rescan-scsi-bus.sh -r")
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error and "command not found" in error:
+                # Try alternative command
+                stdin, stdout, stderr = self.ssh_client.exec_command("echo \"1\" > /sys/class/scsi_host/host*/scan")
+            
+            logger.info("SCSI bus rescanned")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error rescanning SCSI bus: {e}")
+            return False
+    
+    def format_volume(self, device_path: str, filesystem: str = "ext4") -> bool:
+        """Format the volume"""
+        try:
+            format_command = f"mkfs.{filesystem} {device_path}"
+            stdin, stdout, stderr = self.ssh_client.exec_command(format_command)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error:
+                logger.error(f"Formatting error: {error}")
+                return False
+            
+            logger.info(f"Volume formatted with {filesystem}: {output}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error formatting volume: {e}")
+            return False
+    
+    def mount_volume(self, device_path: str, mount_point: str = "/mnt/san_volume") -> bool:
+        """Mount the volume"""
+        try:
+            # Create mount point
+            self.ssh_client.exec_command(f"mkdir -p {mount_point}")
+            
+            # Mount volume
+            mount_command = f"mount {device_path} {mount_point}"
+            stdin, stdout, stderr = self.ssh_client.exec_command(mount_command)
+            error = stderr.read().decode()
+            
+            if error:
+                logger.error(f"Mount error: {error}")
+                return False
+            
+            logger.info(f"Volume mounted at {mount_point}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error mounting volume: {e}")
+            return False
+    
+    def run_iometer(self, test_duration: int = 300, test_config: str = "default") -> bool:
+        """Run IOmeter benchmark"""
+        try:
+            # Install IOmeter if not present (for Debian/Ubuntu)
+            install_cmd = "apt-get update && apt-get install -y iometer"
+            stdin, stdout, stderr = self.ssh_client.exec_command(install_cmd)
+            
+            # Run IOmeter (this is a simplified example)
+            # Actual IOmeter usage would require configuration files
+            iometer_cmd = f"iometer -i /mnt/san_volume -t {test_duration} -c {test_config}"
+            stdin, stdout, stderr = self.ssh_client.exec_command(iometer_cmd)
+            
+            output = stdout.read().decode()
+            logger.info(f"IOmeter output: {output[:500]}...")  # Log first 500 chars
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error running IOmeter: {e}")
+            return False
+    
+    def disconnect(self):
+        """Close SSH connection"""
+        if self.ssh_client:
+            self.ssh_client.close()
+            logger.info("Host SSH connection closed")
+
+def main():
+    # Configuration
+    SAN_IP = "10.196.172.88"
+    HOST_IP = "10.196.172.90"
+    DRIVE_IDS = ["0:0:1", "0:0:2", "0:0:3"]  # Example drive identifiers
+    VOLUME_NAME = "test_volume"
+    VOLUME_SIZE_GB = 100
+    
+    # Initialize managers
+    san_manager = SanStorageManager(SAN_IP, HOST_IP)
+    host_manager = HostManager(HOST_IP)
+    
+    try:
+        # Step 1: Connect to SAN and create RAID 5
+        if not san_manager.connect_to_san():
+            return
+        
+        if not san_manager.create_raid5(DRIVE_IDS):
+            return
+        
+        # Wait for RAID to initialize
+        time.sleep(10)
+        
+        # Step 2: Create volume
+        if not san_manager.create_volume(VOLUME_NAME, VOLUME_SIZE_GB):
+            return
+        
+        # Step 3: Map volume to host
+        if not san_manager.map_volume_to_host(VOLUME_NAME):
+            return
+        
+        # Step 4: Connect to host and configure
+        if not host_manager.connect_to_host():
+            return
+        
+        # Rescan for new storage
+        host_manager.rescan_scsi_bus()
+        time.sleep(5)
+        
+        # Assuming the new device is /dev/sdb (you might need to detect this)
+        DEVICE_PATH = "/dev/sdb"
+        
+        # Format and mount
+        if not host_manager.format_volume(DEVICE_PATH):
+            return
+        
+        if not host_manager.mount_volume(DEVICE_PATH):
+            return
+        
+        # Step 5: Run IOmeter
+        logger.info("Starting IOmeter benchmark...")
+        host_manager.run_iometer(test_duration=60)  # 1 minute test
+        
+        logger.info("All operations completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    
+    finally:
+        # Cleanup
+        san_manager.disconnect()
+        host_manager.disconnect()
+
+if __name__ == "__main__":
+    main()
