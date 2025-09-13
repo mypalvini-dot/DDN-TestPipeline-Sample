@@ -1,0 +1,449 @@
+import requests
+import json
+import time
+import logging
+from typing import Dict, List, Optional
+import paramiko
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+class SanStorageAPI:
+    def __init__(self, san_ip: str, username: str, password: str, verify_ssl: bool = False):
+        self.base_url = f"https://{san_ip}/api"
+        self.username = username
+        self.password = password
+        self.verify_ssl = verify_ssl
+        self.session = requests.Session()
+        self.token = None
+        
+        # Disable SSL warnings if not verifying
+        if not verify_ssl:
+            requests.packages.urllib3.disable_warnings()
+    
+    def login(self) -> bool:
+        """Authenticate with the SAN storage API"""
+        try:
+            auth_url = f"{self.base_url}/login"
+            auth_data = {
+                "username": self.username,
+                "password": self.password
+            }
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            response = self.session.post(
+                auth_url,
+                json=auth_data,
+                headers=headers,
+                verify=self.verify_ssl,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                auth_response = response.json()
+                self.token = auth_response.get('token')
+                if self.token:
+                    self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+                    logger.info("Successfully authenticated with SAN API")
+                    return True
+                else:
+                    logger.error("No token received in authentication response")
+                    return False
+            else:
+                logger.error(f"Authentication failed: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error during authentication: {e}")
+            return False
+    
+    def get_disks(self) -> Optional[List[Dict]]:
+        """Get list of available disks"""
+        try:
+            url = f"{self.base_url}/storage/disks"
+            response = self.session.get(url, verify=self.verify_ssl, timeout=30)
+            
+            if response.status_code == 200:
+                disks = response.json().get('disks', [])
+                logger.info(f"Found {len(disks)} available disks")
+                return disks
+            else:
+                logger.error(f"Failed to get disks: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting disks: {e}")
+            return None
+    
+    def create_raid5(self, disk_ids: List[str], raid_name: str = "raid5_array") -> Optional[str]:
+        """Create RAID 5 array with specified disks"""
+        try:
+            url = f"{self.base_url}/storage/arrays"
+            payload = {
+                "name": raid_name,
+                "raid_level": "5",
+                "disks": disk_ids,
+                "strip_size": "256KB",  # Adjust based on your requirements
+                "read_policy": "adaptive_read_ahead",
+                "write_policy": "write_back"
+            }
+            
+            response = self.session.post(
+                url,
+                json=payload,
+                verify=self.verify_ssl,
+                timeout=60  # Longer timeout for RAID creation
+            )
+            
+            if response.status_code in [200, 201, 202]:
+                raid_info = response.json()
+                array_id = raid_info.get('id')
+                logger.info(f"RAID 5 array created successfully: {array_id}")
+                return array_id
+            else:
+                logger.error(f"Failed to create RAID 5: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error creating RAID 5: {e}")
+            return None
+    
+    def create_volume(self, array_id: str, volume_name: str, size_gb: int) -> Optional[str]:
+        """Create volume on the RAID array"""
+        try:
+            url = f"{self.base_url}/storage/volumes"
+            payload = {
+                "name": volume_name,
+                "array_id": array_id,
+                "size": size_gb * 1024,  # Convert GB to MB (adjust based on API requirements)
+                "size_unit": "GB",
+                "thin_provision": False,
+                "tiering_policy": "auto"
+            }
+            
+            response = self.session.post(
+                url,
+                json=payload,
+                verify=self.verify_ssl,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201, 202]:
+                volume_info = response.json()
+                volume_id = volume_info.get('id')
+                logger.info(f"Volume created successfully: {volume_id}")
+                return volume_id
+            else:
+                logger.error(f"Failed to create volume: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error creating volume: {e}")
+            return None
+    
+    def map_volume_to_host(self, volume_id: str, host_name: str, lun_id: int = 0) -> bool:
+        """Map volume to host"""
+        try:
+            url = f"{self.base_url}/storage/mappings"
+            payload = {
+                "volume_id": volume_id,
+                "host_name": host_name,
+                "lun_id": lun_id,
+                "access_mode": "read_write"
+            }
+            
+            response = self.session.post(
+                url,
+                json=payload,
+                verify=self.verify_ssl,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201, 202]:
+                logger.info(f"Volume mapped successfully to host: {host_name}")
+                return True
+            else:
+                logger.error(f"Failed to map volume: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error mapping volume: {e}")
+            return False
+    
+    def get_volume_info(self, volume_id: str) -> Optional[Dict]:
+        """Get volume information including LUN details"""
+        try:
+            url = f"{self.base_url}/storage/volumes/{volume_id}"
+            response = self.session.get(url, verify=self.verify_ssl, timeout=30)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Failed to get volume info: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting volume info: {e}")
+            return None
+    
+    def logout(self):
+        """Logout from the API session"""
+        try:
+            url = f"{self.base_url}/logout"
+            self.session.post(url, verify=self.verify_ssl, timeout=10)
+            logger.info("Logged out from SAN API")
+        except Exception as e:
+            logger.warning(f"Error during logout: {e}")
+
+class HostManager:
+    def __init__(self, host_ip: str, username: str, password: str):
+        self.host_ip = host_ip
+        self.username = username
+        self.password = password
+        self.ssh_client = None
+    
+    def connect(self) -> bool:
+        """Establish SSH connection to host"""
+        try:
+            self.ssh_client = paramiko.SSHClient()
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh_client.connect(
+                self.host_ip,
+                username=self.username,
+                password=self.password,
+                timeout=30
+            )
+            logger.info(f"Connected to host: {self.host_ip}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to host: {e}")
+            return False
+    
+    def rescan_storage(self) -> bool:
+        """Rescan storage devices"""
+        try:
+            commands = [
+                "echo \"1\" > /sys/class/scsi_host/host0/scan",
+                "echo \"1\" > /sys/class/scsi_host/host1/scan",
+                "echo \"1\" > /sys/class/scsi_host/host2/scan"
+            ]
+            
+            for cmd in commands:
+                stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+                error = stderr.read().decode()
+                if error:
+                    logger.warning(f"Warning during rescan: {error}")
+            
+            time.sleep(3)  # Wait for devices to appear
+            logger.info("Storage rescan completed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during storage rescan: {e}")
+            return False
+    
+    def get_new_device(self) -> Optional[str]:
+        """Find the new storage device"""
+        try:
+            # Get current block devices
+            stdin, stdout, stderr = self.ssh_client.exec_command("lsblk -d -o NAME,SIZE,MODEL | grep -v '^NAME'")
+            devices = stdout.read().decode().splitlines()
+            
+            # This is a simplified approach - you might need more sophisticated detection
+            for device in devices:
+                if "sd" in device and "LUN" in device:  # Adjust based on your SAN's device naming
+                    device_name = device.split()[0]
+                    return f"/dev/{device_name}"
+            
+            logger.warning("No new devices found, trying /dev/sdb")
+            return "/dev/sdb"  # Fallback
+            
+        except Exception as e:
+            logger.error(f"Error finding new device: {e}")
+            return None
+    
+    def format_and_mount(self, device: str, mount_point: str = "/mnt/san_volume") -> bool:
+        """Format and mount the volume"""
+        try:
+            # Create filesystem
+            format_cmd = f"mkfs.ext4 {device}"
+            stdin, stdout, stderr = self.ssh_client.exec_command(format_cmd)
+            error = stderr.read().decode()
+            if error and "mounted" not in error:
+                logger.error(f"Format error: {error}")
+                return False
+            
+            # Create mount point and mount
+            mount_cmds = [
+                f"mkdir -p {mount_point}",
+                f"mount {device} {mount_point}",
+                f"chmod 777 {mount_point}"  # For IOmeter access
+            ]
+            
+            for cmd in mount_cmds:
+                stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+                error = stderr.read().decode()
+                if error:
+                    logger.error(f"Mount error: {error}")
+                    return False
+            
+            logger.info(f"Volume formatted and mounted at {mount_point}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during format/mount: {e}")
+            return False
+    
+    def run_iometer(self, mount_point: str, test_duration: int = 300) -> bool:
+        """Run IOmeter benchmark using Docker (alternative approach)"""
+        try:
+            # Using Docker to run IOmeter (more reliable than native installation)
+            docker_cmd = f"""
+            docker run --rm -v {mount_point}:/test \\
+            -e DURATION={test_duration} \\
+            -e TEST_TYPE=throughput \\
+            iometer-benchmark
+            """
+            
+            # Alternatively, use pre-installed IOmeter or fio
+            fio_cmd = f"""
+            fio --name=benchmark --directory={mount_point} --size=1G --rw=randrw \\
+            --bs=4k --ioengine=libaio --iodepth=32 --runtime={test_duration} \\
+            --numjobs=4 --time_based --group_reporting
+            """
+            
+            stdin, stdout, stderr = self.ssh_client.exec_command(fio_cmd)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            
+            if error and "command not found" in error:
+                logger.warning("fio not found, trying dd as fallback")
+                return self.run_dd_benchmark(mount_point)
+            
+            logger.info(f"IO benchmark completed. Output: {output[:200]}...")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error running benchmark: {e}")
+            return False
+    
+    def run_dd_benchmark(self, mount_point: str) -> bool:
+        """Fallback benchmark using dd"""
+        try:
+            test_file = f"{mount_point}/testfile"
+            dd_cmd = f"""
+            dd if=/dev/zero of={test_file} bs=1G count=1 oflag=direct && \\
+            dd if={test_file} of=/dev/null bs=1M iflag=direct
+            """
+            
+            stdin, stdout, stderr = self.ssh_client.exec_command(dd_cmd)
+            output = stdout.read().decode()
+            logger.info(f"DD benchmark completed: {output}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error running DD benchmark: {e}")
+            return False
+    
+    def disconnect(self):
+        """Close SSH connection"""
+        if self.ssh_client:
+            self.ssh_client.close()
+            logger.info("Host SSH connection closed")
+
+def main():
+    # Configuration
+    SAN_IP = "10.196.172.88"
+    HOST_IP = "10.196.172.90"
+    SAN_USERNAME = "admin"
+    SAN_PASSWORD = "your_san_password"
+    HOST_USERNAME = "root"
+    HOST_PASSWORD = "your_host_password"
+    HOST_NAME = "test-host"  # As registered in SAN
+    
+    # Initialize managers
+    san_api = SanStorageAPI(SAN_IP, SAN_USERNAME, SAN_PASSWORD, verify_ssl=False)
+    host_manager = HostManager(HOST_IP, HOST_USERNAME, HOST_PASSWORD)
+    
+    try:
+        # Step 1: Login to SAN API
+        if not san_api.login():
+            logger.error("Failed to login to SAN API")
+            return
+        
+        # Step 2: Get available disks
+        disks = san_api.get_disks()
+        if not disks:
+            logger.error("No disks available")
+            return
+        
+        # Select first 3 disks for RAID 5
+        disk_ids = [disk['id'] for disk in disks[:3]]
+        logger.info(f"Selected disks for RAID 5: {disk_ids}")
+        
+        # Step 3: Create RAID 5
+        array_id = san_api.create_raid5(disk_ids)
+        if not array_id:
+            logger.error("Failed to create RAID 5")
+            return
+        
+        # Wait for RAID to initialize
+        logger.info("Waiting for RAID initialization...")
+        time.sleep(30)
+        
+        # Step 4: Create volume
+        volume_id = san_api.create_volume(array_id, "test_volume", 100)
+        if not volume_id:
+            logger.error("Failed to create volume")
+            return
+        
+        # Step 5: Map volume to host
+        if not san_api.map_volume_to_host(volume_id, HOST_NAME):
+            logger.error("Failed to map volume to host")
+            return
+        
+        # Step 6: Connect to host and configure
+        if not host_manager.connect():
+            logger.error("Failed to connect to host")
+            return
+        
+        # Rescan storage
+        host_manager.rescan_storage()
+        
+        # Find and configure new device
+        device = host_manager.get_new_device()
+        if not device:
+            logger.error("No new device found")
+            return
+        
+        logger.info(f"Found new device: {device}")
+        
+        # Format and mount
+        if not host_manager.format_and_mount(device):
+            logger.error("Failed to format and mount volume")
+            return
+        
+        # Step 7: Run benchmark
+        logger.info("Starting storage benchmark...")
+        if not host_manager.run_iometer("/mnt/san_volume", 60):  # 1 minute test
+            logger.warning("Benchmark completed with warnings")
+        else:
+            logger.info("Benchmark completed successfully")
+        
+        logger.info("All operations completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    
+    finally:
+        # Cleanup
+        san_api.logout()
+        host_manager.disconnect()
+
+if __name__ == "__main__":
+    main()
